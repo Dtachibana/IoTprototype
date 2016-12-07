@@ -1,0 +1,19 @@
+void setup() {
+  //１３番ピンをOutputモードに切り替え
+  pinMode(13, OUTPUT);
+  //シリアルポートに文字列出力
+  Serial.begin(9600);
+  Serial.print("セットアップ完了！");
+}
+
+// the loop function runs over and over again forever
+void loop() {
+//  digitalWrite(13, HIGH);   // turn the LED on (HIGH is the voltage level)
+//  delay(1000);              // 一秒待つ
+//  digitalWrite(13, LOW);    // turn the LED off by making the voltage LOW
+  delay(2000);              // 一秒待つ
+  int value;
+  value = analogRead(A0);
+  Serial.print("setup");
+  Serial.print(value);
+}
