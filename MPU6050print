@@ -1,5 +1,6 @@
 // MPU-6050 Accelerometer + Gyro
   #include <Wire.h>
+  #include <ArduinoJson.h>
  
   #define MPU6050_ACCEL_XOUT_H       0x3B   // R
   #define MPU6050_WHO_AM_I           0x75   // R
@@ -61,8 +62,6 @@ void setup(){
   float dT;
   accel_t_gyro_union accel_t_gyro;
   error = MPU6050_read (MPU6050_ACCEL_XOUT_H, (uint8_t *) &accel_t_gyro, sizeof(accel_t_gyro));
-  Serial.print(error,DEC);
-  Serial.print("\t");
  
     uint8_t swap;
 #define SWAP(x,y) swap = x; x = y; y = swap
@@ -75,41 +74,35 @@ void setup(){
   SWAP (accel_t_gyro.reg.z_gyro_h, accel_t_gyro.reg.z_gyro_l);
  
   dT = ( (float) accel_t_gyro.value.temperature + 12412.0) / 340.0;
-  Serial.print(dT, 1);
-  Serial.print("\t");
  
   float acc_x = accel_t_gyro.value.x_accel / 16384.0; //FS_SEL_0 16,384 LSB / g
   float acc_y = accel_t_gyro.value.y_accel / 16384.0;
   float acc_z = accel_t_gyro.value.z_accel / 16384.0;
  
-  Serial.print(acc_x, 2);
-  Serial.print("\t");
-  Serial.print(acc_y, 2);
-  Serial.print("\t");
-  Serial.print(acc_z, 2);
-  Serial.print("\t");
- 
   float acc_angle_x = atan2(acc_x, acc_z) * 360 / 2.0 / PI;
   float acc_angle_y = atan2(acc_y, acc_z) * 360 / 2.0 / PI;
   float acc_angle_z = atan2(acc_x, acc_y) * 360 / 2.0 / PI;
- 
-  Serial.print(acc_angle_x, 2);
-  Serial.print("\t");
-  Serial.print(acc_angle_y, 2);
-  Serial.print("\t");
-  Serial.print(acc_angle_z, 2);
-  Serial.print("\t");
  
   float gyro_x = accel_t_gyro.value.x_gyro / 131.0;  //FS_SEL_0 131 LSB / (°/s)
   float gyro_y = accel_t_gyro.value.y_gyro / 131.0;
   float gyro_z = accel_t_gyro.value.z_gyro / 131.0;
  
-  Serial.print(gyro_x, 2);
-  Serial.print("\t");
-  Serial.print(gyro_y, 2);
-  Serial.print("\t");
-  Serial.print(gyro_z, 2);
+  StaticJsonBuffer<200> jsonBuffer;
+  JsonObject& root = jsonBuffer.createObject();
+  root["dT"] = dT;
+  root["acc_x"] = acc_x;
+  root["acc_y"] = acc_y;
+  root["acc_z"] = acc_z;
+  root["acc_angle_x"] = acc_angle_x;
+  root["acc_angle_y"] = acc_angle_y;
+  root["acc_angle_z"] = acc_angle_z;
+  root["gyro_x"] = gyro_x;
+  root["gyro_y"] = gyro_y;
+  root["gyro_z"] = gyro_z;
+  
+  root.printTo(Serial);
   Serial.println("");
+
 }
  
 // MPU6050_read
