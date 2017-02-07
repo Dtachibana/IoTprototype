@@ -1,0 +1,84 @@
+#include <FS.h>
+#define FREQUENCY 8000
+#define DURATION 16000
+
+int analogPin = 0; // ポテンショメータのワイプ(中央の端子)を接続する
+                       // 両端はグランドと+5Vに接続
+int val = 0;           // 読み取った値を格納する変数
+int adc_bias;
+int16_t buffer[16000];
+int bitsize = 16;
+
+File fd;
+
+void init_adc_bias() {
+  for (int i = 0; i < 1 << 8; i++) {
+    adc_bias += analogRead(analogPin);
+    delay(1);   //    os_delay(1);
+  }
+  adc_bias >>= 8;
+}
+
+void sampling(){
+  for (int i = 0; i < 1 << 16000; i++) {   //2秒サンプリング処理を繰り返す
+     uint16_t sensorValue = analogRead(A0) - adc_bias; //アナログファイルの読み込み
+     buffer[i] = sensorValue;//サンプリングファイルの作成
+     delay(125);     //125マイクロ秒待ち
+  }
+}
+
+void makefile(){
+  SPIFFS.format();  // 書き込み速度のムラをなくす
+  fd = SPIFFS.open("/sample.wav", "w"); 
+  writeRiffHeader(&fd);       // ヘッダの書き込み
+  for (int i = 0; i < 1 << 16000; i++) {   //2秒サンプリング処理を繰り返す  
+    fd.write((uint8_t*)buffer[i], bitsize); //音声ファイルの書き込み（まだ途中）
+  }
+}
+
+void writeRiffHeader(Stream *fd) {
+  struct {
+    char riff[4];
+    int32_t len1;
+    char wave[4];
+    char fmt[4];
+    int32_t formatSize;
+    int16_t formatCode;
+    int16_t channelCount;
+    int32_t samplingRate;
+    int32_t bytesPerSecond;
+    int16_t bytesPerBlock;
+    int16_t bitsPerSample;
+    char data[4];
+    int32_t len2;
+  } riff_header;
+  int size = sizeof(riff_header) - 4 + 4 + FREQUENCY * (DURATION / 1000) * 2;
+  strncpy(riff_header.riff, "RIFF", 4);
+  riff_header.len1 = size;
+  strncpy(riff_header.wave, "WAVE", 4);
+  strncpy(riff_header.fmt, "fmt ", 4);  // start of format chunk
+  riff_header.formatSize = 16;
+  riff_header.formatCode = 1;  // uncompressed PCM
+  riff_header.channelCount = 1; // monoral
+  riff_header.samplingRate = FREQUENCY; // Heltz
+  riff_header.bytesPerSecond = FREQUENCY * 2;
+  riff_header.bytesPerBlock = 2;  // 16bit monoral -> 2byte
+  riff_header.bitsPerSample = 16; // 16bit
+  strncpy(riff_header.data, "data", 4);  // start of data chunk
+  riff_header.len2 = FREQUENCY * (DURATION / 1000) * 2;  // wave data size
+  fd->write((uint8_t*)&riff_header, sizeof(riff_header));
+}
+
+void setup() {
+  Serial.begin(9600);        // シリアル通信の初期化
+  init_adc_bias();            // ゼロポイントの測定
+}
+
+void loop() {
+  sampling();
+  Serial.print("sampling conplete!");
+//  Serial.print(buffer);
+  makefile();  //wavファイルの作成
+  Serial.print("make file conplete!");
+  delay(100000);
+}
