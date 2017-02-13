@@ -137,6 +137,23 @@ void https_connect() {
   client.end();
 }
 
+void ifttt_connect() {
+  Serial.println("Start connect to IFTTT");
+//  HTTPClient client;
+  HTTPClient client;
+  String url = "http://maker.ifttt.com/trigger/mic_esp8266/with/key/bIgt8CUUM8ja6BeRi1VmJP";
+//  String json = "{ \"value1\" : \"yeah\"}";
+  client.begin(url);
+  int httpCode = client.GET();
+    Serial.println(httpCode);
+  if (httpCode == HTTP_CODE_OK) {
+    Serial.println("OK");
+  } else {
+    Serial.printf("[HTTP] GET... failed, error: %s\n", client.errorToString(httpCode).c_str());
+  }
+  client.end();
+}
+
 void setup() {
   Serial.begin(9600);        // シリアル通信の初期化
   SPIFFS.begin();
