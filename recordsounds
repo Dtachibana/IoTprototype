@@ -1,5 +1,11 @@
 #include <ESP8266WiFi.h>
 #include <FS.h>
+#include <ESP8266HTTPClient.h>
+
+#define BUFBIT 12
+#define BUFSIZE (1<<BUFBIT)
+#define BUFMASK (BUFSIZE-1)
+
 #define FREQUENCY 8000
 #define DURATION 16000
 #define HOSTNAME 'lineictreserch20161227.s3-ap-northeast-1.amazonaws.com'
@@ -7,8 +13,8 @@
 const char* ssid = "Pi3-ictresearch";
 const char* password = "Pi3ict12345a";
 
-int analogPin = 0; // ポテンショメータのワイプ(中央の端子)を接続する
-                       // 両端はグランドと+5Vに接続
+String payload = "";
+
 int val = 0;           // 読み取った値を格納する変数
 int adc_bias;
 int16_t buffer[16000];
@@ -36,35 +42,39 @@ void wificonnect(){
 
 void init_adc_bias() {
   for (int i = 0; i < 1 << 8; i++) {
-    adc_bias += analogRead(analogPin);
+    adc_bias += analogRead(A0);
     delay(1);   //    os_delay(1);
   }
   adc_bias >>= 8;
 }
 
 void sampling(){
-  for (long i = 0; i < 8000; i++) {   //2秒サンプリング処理を繰り返す
-//     Serial.println(i);
+  for (int i = 0; i < 16000; i++) {   //2秒サンプリング処理を繰り返す
      uint16_t sensorValue = analogRead(A0) - adc_bias; //アナログファイルの読み込み
      buffer[i] = sensorValue;//サンプリングファイルの作成
 //     Serial.println(buffer[i]);
-//     delay(1.25);     //125マイクロ秒待ち
+     ESP.wdtFeed();
   }
 }
 
 void makefile(){
+  Serial.println("debug makefile 1");
   SPIFFS.format();  // 書き込み速度のムラをなくす
+  Serial.println("debug makefile 2");
   fd = SPIFFS.open("/sample.wav", "w"); 
+  Serial.println("debug makefile 3");
   writeRiffHeader(&fd);       // ヘッダの書き込み
+  Serial.println("debug makefile 4");
   ESP.wdtDisable();
-  for (long i = 0; i < 8000; i++) {   //2秒サンプリング処理を繰り返す  
+  for (long i = 0; i < 16000; i++) {   //2秒サンプリング処理を繰り返す  
+//    Serial.print("debug makefile 5-");
 //    Serial.println(i);
-//    Serial.println(buffer[i]);
-    fd.write((uint8_t*)buffer[i], bitsize); //音声ファイルの書き込み（まだ途中）
+    fd.write((uint8_t*)buffer[i], i);
+ //   fd.write((uint8_t*)buffer[i], bitsize); //音声ファイルの書き込み（まだ途中）
+//    Serial.println("ok");
+    fd.close();
     ESP.wdtFeed();
   }
-//  File fd2;
-  Serial.println(fd.size());
 }
 
 void writeRiffHeader(Stream *fd) {
@@ -100,41 +110,36 @@ void writeRiffHeader(Stream *fd) {
   fd->write((uint8_t*)&riff_header, sizeof(riff_header));
 }
 
-void updateaws()//(String tsData)
-{
-  if (client.connect(awsAddress, 80))
-  { 
-    Serial.println("Connected to aws");
-//    Serial.println("Posting: " + tsData);
+void https_connect() {
+  HTTPClient client;
+  String url = "https://lineictreserch20161227.s3-ap-northeast-1.amazonaws.com";
+  client.begin(url);
+  client.addHeader("Content-Type", "audio/wav");
+//  client.addHeader("Connection", "close");
+  client.addHeader("AWSAccessKeyId", "AKIAJE5FIHCBQWNJIQZA");
+  client.addHeader("key", "sample.wav");
 
-    // Create HTTP POST Data
-//    tsData = "api_key="+ awsAPIKey //  +"&status="+ tsData;　途中
-    Serial.println("start http protocol");
-    client.println("POST /sample.wav HTTP/1.1");
-    Serial.println("contenue http protocol 1");
-    client.println("Host: lineictreserch20161227.s3-ap-northeast-1.amazonaws.com");
-    Serial.println("contenue http protocol 2");
-    client.println("Connection: close");
-    Serial.println("contenue http protocol 3");
-    client.println("Content-Type: audio/wav");
-    Serial.println("contenue http protocol 4");
-    client.println("Content-Length: 0");
-//    client.println(tsData.length());
-//    client.println();
-    Serial.println("contenue http protocol 5");
+  File file = SPIFFS.open("/sample.wav", "r");
+  long size = file.size();
+  Serial.println("size is ");
+  Serial.println(size);
 
-//    client.print(tsData);
-    client.stop();
-    Serial.println("contenue http protocol 6");
+  int httpCode = client.sendRequest("POST", &file, size);
+  Serial.printf("Request for recognize sent.\n", size);
+  file.close();
+
+  if (httpCode == HTTP_CODE_OK) {
+    payload = client.getString();
+    Serial.println(payload.c_str());
+  } else {
+    Serial.printf("[HTTP] POST... failed, error: %s\n", client.errorToString(httpCode).c_str());
   }
-  else
-  {
-     Serial.println("Connection failed.");
-  }
+  client.end();
 }
 
 void setup() {
   Serial.begin(9600);        // シリアル通信の初期化
+  SPIFFS.begin();
   wificonnect();
   init_adc_bias();            // ゼロポイントの測定
 }
@@ -149,8 +154,7 @@ void loop() {
   makefile();  //wavファイルの作成
   Serial.println("make file conplete!");
   Serial.println("Start update to AWS");
-  updateaws();  //awsへの転送（途中）
+  https_connect();  //awsへの転送（途中）
   Serial.println("update conplete!");
   Serial.println();
   delay(10000);
-}
