@@ -1,6 +1,11 @@
 #include <ESP8266WiFi.h>
 #include <FS.h>
 #include <ESP8266HTTPClient.h>
+#include <ESP8266WebServer.h>
+
+ESP8266WebServer server(80);
+
+// #include <HttpClient.h>
 
 #define BUFBIT 12
 #define BUFSIZE (1<<BUFBIT)
@@ -9,6 +14,9 @@
 #define FREQUENCY 8000
 #define DURATION 16000
 #define HOSTNAME 'lineictreserch20161227.s3-ap-northeast-1.amazonaws.com'
+
+#define HTML_HEADER "<!doctype html>"\ "<html><head><meta charset=\"UTF-8\"/>"\ "<meta name=\"viewport\" content=\"width=device-width\"/>"\ "</head><body>" 
+#define HTML_FOOTER "</body></html>"
 
 const char* ssid = "Pi3-ictresearch";
 const char* password = "Pi3ict12345a";
@@ -112,6 +120,7 @@ void writeRiffHeader(Stream *fd) {
 
 void https_connect() {
   HTTPClient client;
+//  String url = "http://s3-ap-northeast-1.amazonaws.com/lineictreserch20161227/2017-02-08-04-24-25-3907AF8BD0ECDEAF.txt";
   String url = "https://lineictreserch20161227.s3-ap-northeast-1.amazonaws.com";
   client.begin(url);
   client.addHeader("Content-Type", "audio/wav");
@@ -123,8 +132,11 @@ void https_connect() {
   long size = file.size();
   Serial.println("size is ");
   Serial.println(size);
-
-  int httpCode = client.sendRequest("POST", &file, size);
+//  int httpCode = client.GET();
+  String json = "{ \"value1\" : \"yeah\"}";
+  Serial.println(json);
+  int httpCode = client.POST(json);
+//  int httpCode = client.sendRequest("POST", &file, size);
   Serial.printf("Request for recognize sent.\n", size);
   file.close();
 
@@ -155,14 +167,31 @@ void ifttt_connect() {
 }
 
 void setup() {
+//  Bridge.begin();
   Serial.begin(9600);        // シリアル通信の初期化
   SPIFFS.begin();
   wificonnect();
   init_adc_bias();            // ゼロポイントの測定
+
+  server.on("/", [](){
+//    String html = HTML_HEADER '<h1>NodeMCU!</h1>" HTML_FOOTER;
+    String html = "hello workld";
+    server.send(200, "text/html", html);
+  });
+  server.on("/led/on", [](){
+//    String html = HTML_HEADER "<h1>LED ON</h1>" HTML_FOOTER;
+//    server.send(200, "text/html", html);
+  });
+  server.on("/led/off", [](){
+//    String html = HTML_HEADER "<h1>LED OFF</h1>" HTML_FOOTER;
+//    server.send(200, "text/html", html);
+  });
+  server.begin();
 }
 
 
 void loop() {
+  server.handleClient();
   Serial.println("Start sampling");
   sampling();
   Serial.println("sampling conplete!");
@@ -170,8 +199,10 @@ void loop() {
   Serial.println("Start make file");
   makefile();  //wavファイルの作成
   Serial.println("make file conplete!");
-  Serial.println("Start update to AWS");
+//  Serial.println("Start update to AWS");
   https_connect();  //awsへの転送（途中）
+//  ifttt_connect();
   Serial.println("update conplete!");
   Serial.println();
-  delay(10000);
+  delay(100);
+}
