@@ -1,9 +1,8 @@
 #include <ESP8266WiFi.h>
 #include <FS.h>
 #include <ESP8266HTTPClient.h>
-#include <ESP8266WebServer.h>
-
-ESP8266WebServer server(80);
+#include <PubSubClient.h>
+#include <ArduinoJson.h>
 
 // #include <HttpClient.h>
 
@@ -18,8 +17,13 @@ ESP8266WebServer server(80);
 #define HTML_HEADER "<!doctype html>"\ "<html><head><meta charset=\"UTF-8\"/>"\ "<meta name=\"viewport\" content=\"width=device-width\"/>"\ "</head><body>" 
 #define HTML_FOOTER "</body></html>"
 
-const char* ssid = "Pi3-ictresearch";
-const char* password = "Pi3ict12345a";
+#define MQTT_MAX_PACKET_SIZE 1024
+
+const char* ssid = "HWD15_E0191D8BFAA0";
+const char* password = "gin09rd05828gjq";
+
+//const char* ssid = "Pi3-ictresearch";
+//const char* password = "Pi3ict12345a";
 
 String payload = "";
 
@@ -27,12 +31,54 @@ int val = 0;           // 読み取った値を格納する変数
 int adc_bias;
 int16_t buffer[16000];
 int bitsize = 16;
-char awsAddress[] = "api.thingspeak.com";
+//char awsAddress[] = "api.thingspeak.com";
 //String awsAPIKey = "BLAHBLAHBLAH1234";
 //String hostname = "lineictreserch20161227.s3-ap-northeast-1.amazonaws.com";
 
+const char* mqtthost = "mqtt.beebotte.com";
+
+// Beebotteのチャンネルトークン
+const char* channelToken = "1487141759330_9wR8rnmUk7UOaLKQ";
+
+// トピック名（"channel/resource"の形式）
+const char* topic = "ifttt/action";
+
+const char *clientID = "ESP8266";
+
+
+// メッセージを受け取ったらシリアルにプリント
+void callback(char* topic, byte* payload, unsigned int length) {
+  // PubSubClient.hで定義されているMQTTの最大パケットサイズ
+  char buffer[MQTT_MAX_PACKET_SIZE];
+
+  snprintf(buffer, sizeof(buffer), "%s", payload);
+  Serial.println("received:");
+  Serial.print("topic: ");
+  Serial.println(topic);
+  Serial.println(buffer);
+
+  // 受け取ったJSON形式のペイロードをデコードする
+  StaticJsonBuffer<MQTT_MAX_PACKET_SIZE> jsonBuffer;
+  JsonObject& root = jsonBuffer.parseObject(buffer);
+
+  if (!root.success()) {
+    Serial.println("parseObject() failed");
+    return;
+  }
+
+  const char* parsedPayload = root["data"];
+  if (parsedPayload != NULL) {
+    Serial.print("payload: ");
+    Serial.println(parsedPayload);
+  }
+}
+
+
+
 File fd;
 WiFiClient client;
+
+PubSubClient pubsubclient(mqtthost, 1883, client);
 
 void wificonnect(){
   Serial.println();
@@ -167,42 +213,53 @@ void ifttt_connect() {
 }
 
 void setup() {
-//  Bridge.begin();
+
   Serial.begin(9600);        // シリアル通信の初期化
   SPIFFS.begin();
   wificonnect();
   init_adc_bias();            // ゼロポイントの測定
-
-  server.on("/", [](){
-//    String html = HTML_HEADER '<h1>NodeMCU!</h1>" HTML_FOOTER;
-    String html = "hello workld";
-    server.send(200, "text/html", html);
-  });
-  server.on("/led/on", [](){
-//    String html = HTML_HEADER "<h1>LED ON</h1>" HTML_FOOTER;
-//    server.send(200, "text/html", html);
-  });
-  server.on("/led/off", [](){
-//    String html = HTML_HEADER "<h1>LED OFF</h1>" HTML_FOOTER;
-//    server.send(200, "text/html", html);
-  });
-  server.begin();
 }
 
 
 void loop() {
-  server.handleClient();
   Serial.println("Start sampling");
-  sampling();
+//  sampling();
   Serial.println("sampling conplete!");
 //  Serial.println(buffer);
   Serial.println("Start make file");
-  makefile();  //wavファイルの作成
+//  makefile();  //wavファイルの作成
   Serial.println("make file conplete!");
 //  Serial.println("Start update to AWS");
   https_connect();  //awsへの転送（途中）
 //  ifttt_connect();
   Serial.println("update conplete!");
   Serial.println();
-  delay(100);
+
+
+  // クライアントがサーバに接続されていなければ
+  if (!pubsubclient.connected()) {
+    // ユーザ名を指定して接続
+    String username = "token:";
+    username += channelToken;
+    pubsubclient.connect(clientID, username.c_str(), NULL);
+
+    if (pubsubclient.connected()) {
+      Serial.println("MQTT connected");
+      pubsubclient.setCallback(callback);
+
+      // トピック名を指定してsubscribe
+      pubsubclient.subscribe(topic);
+    } else {
+      Serial.print("MQTT connection failed: ");
+      Serial.println(pubsubclient.state());
+      delay(5000);
+    }
+  } else {
+    // 既にサーバに接続されていれば通常処理を行う
+    pubsubclient.loop();
+  }
+
+
+  
+  delay(10000);
 }
