@@ -1,28 +1,80 @@
+#include <ESP8266WiFi.h>
+#include <PubSubClient.h>
+#include <ArduinoJson.h>
 #include <Adafruit_NeoPixel.h>
+
 
 #define PIN 12
 #define NUMLED 2
 
-Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMLED, PIN, NEO_RGB + NEO_KHZ400);
+#define MQTT_MAX_PACKET_SIZE 1024
 
-void setup() {
-  pixels.begin();
+const char* ssid = "";
+const char* password = "";
+
+
+const char* mqtthost = "mqtt.beebotte.com";
+
+// Beebotteのチャンネルトークン
+const char* channelToken = "1487320061621_4TuCSWp1g1bLz7v1";
+
+// トピック名（"channel/resource"の形式）
+const char* topic = "ict/ai";
+
+const char *clientID = "ESP8266";
+
+Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMLED, PIN, NEO_RGB + NEO_KHZ400);
+WiFiClient client;
+PubSubClient pubsubclient(mqtthost, 1883, client);
+
+
+void wificonnect(){
+  Serial.println();
+  Serial.print("Connecting to ");
+  Serial.print(ssid);
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  } 
+  Serial.println("");
+  Serial.print("WiFi connected, IP address: ");
+  Serial.println(WiFi.localIP());
 }
 
-void loop() {
-  for (int i = 0; i < 256; i++) {
-    setColor( 0, i, 0);
-    delay(10);
+// メッセージを受け取ったらシリアルにプリント
+void callback(char* topic, byte* payload, unsigned int length) {
+  // PubSubClient.hで定義されているMQTTの最大パケットサイズ
+  char buffer[MQTT_MAX_PACKET_SIZE];
+
+  snprintf(buffer, sizeof(buffer), "%s", payload);
+  Serial.println("received:");
+  Serial.print("topic: ");
+  Serial.println(topic);
+  Serial.println(buffer);
+
+  // 受け取ったJSON形式のペイロードをデコードする
+  StaticJsonBuffer<MQTT_MAX_PACKET_SIZE> jsonBuffer;
+  JsonObject& root = jsonBuffer.parseObject(buffer);
+
+  if (!root.success()) {
+    Serial.println("parseObject() failed");
   }
 
-  for (int i = 0; i < 256; i++) {
-    setColor( i, 255, 0);
-    delay(10);
-  }
-
-  for (int i = 0; i < 256; i++) {
-    setColor( 255, 255, i);
-    delay(10);
+  const char* parsedPayload = root["data"];
+  if (parsedPayload != NULL) {
+    Serial.print("payload: ");
+    Serial.println(parsedPayload);
+    if (!strcmp(parsedPayload, "Hi")){
+      Serial.println(parsedPayload);
+      setColor (0, 255, 0);
+      Serial.println("ffffffffffffffff");
+    }
+    else{
+      Serial.println(parsedPayload);
+      Serial.println("elseelseelse");
+      setColor (0, 0, 255);
+    }
   }
 }
 
@@ -32,4 +84,39 @@ void setColor(int r, int g, int b) {
     pixels.show();
   }
   delay(10);
+}
+
+void setup() {
+  pixels.begin();
+  Serial.begin(9600);        // シリアル通信の初期化
+  wificonnect();
+}
+
+void loop() {
+  if (!pubsubclient.connected()) {
+    // ユーザ名を指定して接続
+    String username = "token:";
+    username += channelToken;
+    pubsubclient.connect(clientID, username.c_str(), NULL);
+    Serial.println("MQTT connect start");
+    if (pubsubclient.connected()) {
+      Serial.println("MQTT connected");
+      pubsubclient.setCallback(callback);
+
+      // トピック名を指定してsubscribe
+      Serial.println("MQTT subscribe start");
+      pubsubclient.subscribe(topic);
+      Serial.println("MQTT subscribe finish");
+    } else {
+      Serial.print("MQTT connection failed: ");
+      Serial.println(pubsubclient.state());
+      delay(5000);
+    }
+  } else {
+    // 既にサーバに接続されていれば通常処理を行う
+    pubsubclient.loop();
+    Serial.println("MQTT loop");
+  }
+
+  delay(1000);
 }
