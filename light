@@ -16,7 +16,7 @@ const char* password = "";
 const char* mqtthost = "mqtt.beebotte.com";
 
 // Beebotteのチャンネルトークン
-const char* channelToken = "1487320061621_4TuCSWp1g1bLz7v1";
+const char* channelToken = "<token>";
 
 // トピック名（"channel/resource"の形式）
 const char* topic = "ict/ai";
@@ -68,11 +68,9 @@ void callback(char* topic, byte* payload, unsigned int length) {
     if (!strcmp(parsedPayload, "Hi")){
       Serial.println(parsedPayload);
       setColor (0, 255, 0);
-      Serial.println("ffffffffffffffff");
     }
     else{
       Serial.println(parsedPayload);
-      Serial.println("elseelseelse");
       setColor (0, 0, 255);
     }
   }
