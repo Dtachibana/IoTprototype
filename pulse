@@ -2,7 +2,24 @@ extern "C" {
   #include "user_interface.h"
 }
 
+#include <ESP8266WiFi.h>
+#include <FS.h>
+#include <ESP8266HTTPClient.h>
+#include <PubSubClient.h>
+#include <ArduinoJson.h>
+
 #define N 10
+
+const char* ssid = "";
+const char* password = "";
+//const char* ssid = "";
+//const char* password = "";
+
+const char* mqtthost = "mqtt.beebotte.com";
+const char* channelToken = "";
+const char* topic = "ict/sound";
+const char *clientID = "ESP8266";
+#define MQTT_MAX_PACKET_SIZE 1024
 
 volatile int BPM;
 volatile int Signal;
@@ -109,10 +126,39 @@ unsigned long getCurrentTime() {
   return ESP.getCycleCount() / 80000L;
 }
 
+WiFiClient client;
+
+PubSubClient pubsubclient(mqtthost, 1883, client);
+
+void wificonnect(){
+  Serial.println();
+  Serial.print("Connecting to ");
+  Serial.print(ssid);
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  } 
+  Serial.println("");
+  Serial.print("WiFi connected, IP address: ");
+  Serial.println(WiFi.localIP());
+}
+
+String buildJson() {
+  String json = "{";
+    json += "\"data\":";
+    json += BPM;
+    json += "}";
+
+  return json;
+}
+
+
 void setup() {
+  wificonnect();
   pinMode(FadePin, OUTPUT);
   analogWriteRange(255);
-  Serial.begin(115200); 
+  Serial.begin(9600); 
   noInterrupts();
   setupTimer(10);
   interrupts();
@@ -124,6 +170,30 @@ void loop() {
     FadeRate = 255; 
     Serial.print("BPM: ");
     Serial.println(BPM);
+    String json = buildJson();
+    char jsonStr[200];
+    json.toCharArray(jsonStr,200);
+
+    if (!pubsubclient.connected()) {
+      // ユーザ名を指定して接続
+      String username = "token:";
+      username += channelToken;
+      pubsubclient.connect(clientID, username.c_str(), NULL);
+      Serial.println("MQTT connect start");
+      if (pubsubclient.connected()) {
+        Serial.println("MQTT connected");
+      } else {
+        Serial.print("MQTT connection failed: ");
+        Serial.println(pubsubclient.state());
+        delay(500);
+      }
+    } else {
+    // 既にサーバに接続されていれば通常処理を行う
+    // トピック名を指定してpublish
+      pubsubclient.publish(topic,jsonStr);    
+      pubsubclient.loop();
+      Serial.println("MQTT loop");
+    }
     QS = false;
   }
   
