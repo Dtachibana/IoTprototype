@@ -4,8 +4,6 @@
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
 
-// #include <HttpClient.h>
-
 #define BUFBIT 12
 #define BUFSIZE (1<<BUFBIT)
 #define BUFMASK (BUFSIZE-1)
@@ -22,9 +20,6 @@
 const char* ssid = "";
 const char* password = "";
 
-//const char* ssid = "Pi3-ictresearch";
-//const char* password = "Pi3ict12345a";
-
 String payload = "";
 
 int val = 0;           // 読み取った値を格納する変数
@@ -35,10 +30,10 @@ int bitsize = 16;
 const char* mqtthost = "mqtt.beebotte.com";
 
 // Beebotteのチャンネルトークン
-const char* channelToken = "1487141759330_9wR8rnmUk7UOaLKQ";
+const char* channelToken = <Beebotteのチャンネルトークン>;
 
 // トピック名（"channel/resource"の形式）
-const char* topic = "ifttt/action";
+const char* topic = <Beebotteのトピック名>;
 
 const char *clientID = "ESP8266";
 
@@ -172,13 +167,8 @@ void loop() {
   Serial.println("Start sampling");
 //  sampling();
   Serial.println("sampling conplete!");
-//  Serial.println(buffer);
   Serial.println("Start make file");
-//  makefile();  //wavファイルの作成
   Serial.println("make file conplete!");
-//  Serial.println("Start update to AWS");
-//  https_connect();  //awsへの転送（途中）
-//  ifttt_connect();
   Serial.println("update conplete!");
   Serial.println();
 
@@ -204,7 +194,6 @@ void loop() {
   } else {
     // 既にサーバに接続されていれば通常処理を行う
     // トピック名を指定してpublish
-//      String json = "{ \"value1\" : \"yeah\"}";
     pubsubclient.publish(topic,"{ \"value1\" : \"zzzzzmmmm\"}");    
     pubsubclient.loop();
     Serial.println("MQTT loop");
